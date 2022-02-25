@@ -3,7 +3,7 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const User = require("../../database/models/User");
 
-const loginController = async (req, res, next) => {
+const userLogin = async (req, res, next) => {
   const { username, password } = req.body;
   const findUser = await User.findOne({ username });
 
@@ -30,4 +30,4 @@ const loginController = async (req, res, next) => {
   return res.json({ token });
 };
 
-module.exports = { loginController };
+module.exports = { userLogin };
