@@ -30,4 +30,25 @@ const userLogin = async (req, res, next) => {
   return res.json({ token });
 };
 
-module.exports = { userLogin };
+const userRegister = async (req, res, next) => {
+  const { name, username, password } = req.body;
+
+  if (!name || !username || !password) {
+    const error = new Error("Register not found");
+    error.code = 400;
+    return next(error);
+  }
+
+  const findNewUser = await User.findOne({ username });
+  if (findNewUser) {
+    const error = new Error("This username already exists");
+    error.code = 400;
+    return next(error);
+  }
+
+  const encryptedPassword = await bcrypt.hash(password, +process.env.SALT);
+  req.body.password = encryptedPassword;
+  const userdata = await User.create(req.body);
+  return res.status(201).json(userdata);
+};
+module.exports = { userLogin, userRegister };
