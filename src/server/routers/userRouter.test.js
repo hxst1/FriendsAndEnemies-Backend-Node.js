@@ -81,7 +81,6 @@ describe("Given a /users/resgister endpoint", () => {
         name: "user2",
         username: "username2",
         password: "user2",
-        img: "",
       };
 
       await request(app).post("/users/register").send(user).expect(201);
