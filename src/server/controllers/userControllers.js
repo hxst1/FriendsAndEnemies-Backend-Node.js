@@ -1,6 +1,8 @@
 require("dotenv").config();
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const path = require("path");
+const fs = require("fs");
 const User = require("../../database/models/User");
 
 const userLogin = async (req, res, next) => {
@@ -31,24 +33,60 @@ const userLogin = async (req, res, next) => {
 };
 
 const userRegister = async (req, res, next) => {
-  const { name, username, password } = req.body;
+  try {
+    const oldPath = path.join("uploads/", req.file.filename);
+    const newPath = path.join("uploads/", req.body.username);
+    fs.rename(oldPath, newPath, (error) => {
+      if (error) {
+        next(error);
+      }
+    });
+    req.body.image = newPath;
 
-  if (!name || !username || !password) {
-    const error = new Error("Register not found");
-    error.code = 400;
+    const { username, password, name, image } = req.body;
+
+    if (!name || !username || !password || !image) {
+      const error = new Error("Register not found");
+      error.code = 400;
+      return next(error);
+    }
+
+    const findNewUser = await User.findOne({ username });
+
+    if (findNewUser) {
+      const error = new Error("This username already exists");
+      error.code = 400;
+      return next(error);
+    }
+
+    const encryptedPassword = await bcrypt.hash(password, +process.env.SALT);
+    req.body.password = encryptedPassword;
+    const userdata = await User.create(req.body);
+
+    return res.status(201).json(userdata);
+  } catch (error) {
     return next(error);
   }
-
-  const findNewUser = await User.findOne({ username });
-  if (findNewUser) {
-    const error = new Error("This username already exists");
-    error.code = 400;
-    return next(error);
-  }
-
-  const encryptedPassword = await bcrypt.hash(password, +process.env.SALT);
-  req.body.password = encryptedPassword;
-  const userdata = await User.create(req.body);
-  return res.status(201).json(userdata);
 };
-module.exports = { userLogin, userRegister };
+
+const getAllUsers = async (req, res) => {
+  const headerAuth = req.header("Authorization");
+  const token = headerAuth.replace("Bearer ", "");
+  const { id } = jwt.verify(token, process.env.JWT_SECRET);
+
+  const users = await User.find();
+  const actualUser = await User.findById(id);
+  const returnedUsers = users.filter((user) => user.id !== actualUser.id);
+  res.status(200).json({ returnedUsers });
+};
+
+const getUser = async (req, res) => {
+  const headerAuth = req.header("Authorization");
+  const token = headerAuth.replace("Bearer ", "");
+  const { id } = jwt.verify(token, process.env.JWT_SECRET);
+
+  const actualUser = await User.findById(id);
+  res.status(200).json({ actualUser });
+};
+
+module.exports = { userLogin, userRegister, getAllUsers, getUser };
