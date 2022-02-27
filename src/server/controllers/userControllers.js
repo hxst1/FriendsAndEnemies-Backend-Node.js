@@ -5,7 +5,78 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const path = require("path");
 const fs = require("fs");
+const { initializeApp } = require("firebase/app");
+const {
+  getStorage,
+  ref,
+  uploadBytes,
+  getDownloadURL,
+} = require("firebase/storage");
+
+const firebaseConfig = {
+  apiKey: process.env.FIRE_BASE_API_KEY,
+  authDomain: "social-uwu.firebaseapp.com",
+  projectId: "social-uwu",
+  storageBucket: "social-uwu.appspot.com",
+  messagingSenderId: "1040872601167",
+  appId: "1:1040872601167:web:3d38c70dae29b8c36e5c3a",
+};
+
+const fireBaseApp = initializeApp(firebaseConfig);
+const storage = getStorage(fireBaseApp);
+
 const User = require("../../database/models/User");
+
+const userRegister = async (req, res, next) => {
+  const { username, password, name } = req.body;
+  try {
+    const encryptedPassword = await bcrypt.hash(password, +process.env.SALT);
+    const usernameExists = await User.findOne({ username });
+    if (usernameExists) {
+      const error = new Error(`Username ${username} already exists!`);
+      error.code = 400;
+      next(error);
+      return;
+    }
+    const oldFileName = path.join("public", req.file.filename);
+    const newFileName = path.join("public", req.file.originalname);
+    fs.rename(oldFileName, newFileName, (error) => {
+      if (error) {
+        next(error);
+      }
+    });
+    fs.readFile(newFileName, async (error, file) => {
+      if (error) {
+        next(error);
+      } else {
+        const storageRef = ref(
+          storage,
+          `${Date.now()}_${req.file.originalname}`
+        );
+        await uploadBytes(storageRef, file);
+        const firebaseFileURL = await getDownloadURL(storageRef);
+        const newUser = await User.create({
+          username,
+          password: encryptedPassword,
+          name,
+          image: firebaseFileURL,
+        });
+        debug(
+          chalk.cyanBright(`User created with username: ${newUser.username}`)
+        );
+        res.status(201);
+        res.json({
+          message: `User registered with username: ${newUser.username}`,
+        });
+      }
+    });
+  } catch (error) {
+    fs.unlink(path.join("uploads", req.file.filename), () => {
+      error.code = 400;
+      next(error);
+    });
+  }
+};
 
 const userLogin = async (req, res, next) => {
   const { username, password } = req.body;
@@ -32,37 +103,6 @@ const userLogin = async (req, res, next) => {
 
   const token = jwt.sign(UserData, process.env.JWT_SECRET);
   return res.json({ token });
-};
-
-const userRegister = async (req, res, next) => {
-  const { username, password, name } = req.body;
-  try {
-    const encryptedPassword = await bcrypt.hash(password, +process.env.SALT);
-    const usernameExists = await User.findOne({ username });
-    if (usernameExists) {
-      const error = new Error(`Username ${username} already exists!`);
-      error.code = 400;
-      next(error);
-      return;
-    }
-    const oldFileName = path.join("uploads", req.file.filename);
-    const newFileName = path.join("uploads", req.file.originalname);
-    fs.rename(oldFileName, newFileName, () => {});
-    const newUser = await User.create({
-      username,
-      password: encryptedPassword,
-      name,
-      image: newFileName,
-    });
-    debug(chalk.cyanBright(`User created with username: ${newUser.username}`));
-    res.status(201);
-    res.json({ message: `User registered with username: ${newUser.username}` });
-  } catch (error) {
-    fs.unlink(path.join("uploads", req.file.filename), () => {
-      error.code = 400;
-      next(error);
-    });
-  }
 };
 
 const getAllUsers = async (req, res) => {
