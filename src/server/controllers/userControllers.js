@@ -1,4 +1,6 @@
 require("dotenv").config();
+const debug = require("debug")("social: userController");
+const chalk = require("chalk");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const path = require("path");
@@ -33,39 +35,33 @@ const userLogin = async (req, res, next) => {
 };
 
 const userRegister = async (req, res, next) => {
+  const { username, password, name } = req.body;
   try {
-    const oldPath = path.join("uploads/", req.file.filename);
-    const newPath = path.join("uploads/", req.body.username);
-    fs.rename(oldPath, newPath, (error) => {
-      if (error) {
-        next(error);
-      }
-    });
-    req.body.image = newPath;
-
-    const { username, password, name, image } = req.body;
-
-    if (!name || !username || !password || !image) {
-      const error = new Error("Register not found");
-      error.code = 400;
-      return next(error);
-    }
-
-    const findNewUser = await User.findOne({ username });
-
-    if (findNewUser) {
-      const error = new Error("This username already exists");
-      error.code = 400;
-      return next(error);
-    }
-
     const encryptedPassword = await bcrypt.hash(password, +process.env.SALT);
-    req.body.password = encryptedPassword;
-    const userdata = await User.create(req.body);
-
-    return res.status(201).json(userdata);
+    const usernameExists = await User.findOne({ username });
+    if (usernameExists) {
+      const error = new Error(`Username ${username} already exists!`);
+      error.code = 400;
+      next(error);
+      return;
+    }
+    const oldFileName = path.join("uploads", req.file.filename);
+    const newFileName = path.join("uploads", req.file.originalname);
+    fs.rename(oldFileName, newFileName, () => {});
+    const newUser = await User.create({
+      username,
+      password: encryptedPassword,
+      name,
+      image: newFileName,
+    });
+    debug(chalk.cyanBright(`User created with username: ${newUser.username}`));
+    res.status(201);
+    res.json({ message: `User registered with username: ${newUser.username}` });
   } catch (error) {
-    return next(error);
+    fs.unlink(path.join("uploads", req.file.filename), () => {
+      error.code = 400;
+      next(error);
+    });
   }
 };
 
