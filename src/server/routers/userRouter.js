@@ -8,7 +8,7 @@ const {
 } = require("../controllers/userControllers");
 const auth = require("../middlewares/auth");
 
-const upload = multer({ dest: "uploads/" });
+const upload = multer({ dest: "public/" });
 const router = express.Router();
 
 router.post("/login", userLogin);
